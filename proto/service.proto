@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package Mafia;
+option go_package = "https://github.com/Alucardik/soa-4/proto";
+
+service Mafia {
+  rpc Connect(ClientInfo) returns (ClientId) {};
+  rpc Disconnect(ClientId) returns (EmptyMsg) {};
+  rpc SubscribeToNotifications(ClientId) returns (stream Notification);
+  rpc ShowPlayersList(EmptyMsg) returns (PlayersList);
+}
+
+message EmptyMsg {
+}
+
+message ClientId {
+  uint64 id = 1;
+}
+
+message ClientInfo {
+  string name = 1;
+}
+
+message Notification {
+  string info = 1;
+}
+
+message PlayersList {
+  repeated string players = 1;
+}
