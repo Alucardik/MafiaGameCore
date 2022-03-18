@@ -7,7 +7,9 @@ import (
 	"log"
 	"mafia-core/proto"
 	"net"
+	"strings"
 	"sync"
+	"time"
 )
 
 type server struct {
@@ -16,51 +18,123 @@ type server struct {
 	// TODO: replace with a more suitable identifier
 	nextClientId uint64
 	sessionStart chan int
-	sessionEnd   chan int
 	mutex        sync.Mutex
 }
 
-func (s *server) broadcast(msg notification) {
-	for _, player := range s.session.players {
-		player.notificationChannel <- msg
-	}
-}
-
 func (s *server) Connect(_ context.Context, req *proto.ClientInfo) (*proto.ClientId, error) {
+	if s.session.HasStarted() {
+		return &proto.ClientId{Id: 42}, sessionStartedError
+	}
+
 	s.mutex.Lock()
 	clientId := s.nextClientId
-	// making channels buffered, so that broadcast wouldn't be synchronous
-	s.session.players[clientId] = &MafiaPlayer{name: req.Name, notificationChannel: make(chan notification, 10)}
-	s.broadcast(notification{CLIENT_CONNECTED, s.session.players[clientId].GetName()})
+	// TODO: add player to another session instead of kicking
+	err := s.session.AddPlayer(clientId, req.Name)
+	if err != nil {
+		return &proto.ClientId{Id: 0}, err
+	}
+	s.session.NotifyPlayers(Notification{CLIENT_CONNECTED, s.session.GetPlayersName(clientId)}, ALL)
 	s.nextClientId++
+	// TODO: check if this logic suits the project
+	if s.session.GetPlayersCount() == PLAYERS_LOWER_LIM {
+		s.sessionStart <- 1
+	}
 	s.mutex.Unlock()
 	return &proto.ClientId{Id: clientId}, nil
 }
 
+// TODO: WHY DO U KEEP FAILING
 func (s *server) Disconnect(_ context.Context, req *proto.ClientId) (*proto.EmptyMsg, error) {
-	s.broadcast(notification{CLIENT_DISCONNECTED, s.session.players[req.Id].GetName()})
-	// TODO: check if player receives his own notification and nothing breaks
-	close(s.session.players[req.Id].notificationChannel)
+	s.session.NotifyPlayers(Notification{CLIENT_DISCONNECTED, s.session.GetPlayersName(req.Id)}, ALL)
+	//TODO: check this s.session.UnsubscribePlayerFromNotifications(req.Id)
+
 	s.mutex.Lock()
-	delete(s.session.players, req.Id)
+	s.session.RemovePlayer(req.Id)
 	s.mutex.Unlock()
 	return &proto.EmptyMsg{}, nil
 }
 
 func (s *server) SubscribeToNotifications(req *proto.ClientId, stream proto.Mafia_SubscribeToNotificationsServer) error {
-	for event := range s.session.players[req.Id].notificationChannel {
+	event, err := s.session.GetPlayersNotifications(req.Id)
+	for ; err == nil; event, err = s.session.GetPlayersNotifications(req.Id) {
 		switch event.eventType {
-		case CLIENT_DISCONNECTED:
-			if err := stream.Send(&proto.Notification{Info: "Player " + event.clientName + " disconnected"}); err != nil {
+		case CLIENT_CONNECTED:
+			if err := stream.Send(&proto.Notification{Info: "Player " + event.info + " connected"}); err != nil {
 				return err
 			}
-		case CLIENT_CONNECTED:
-			if err := stream.Send(&proto.Notification{Info: "Player " + event.clientName + " connected"}); err != nil {
+		case CLIENT_DISCONNECTED:
+			if err := stream.Send(&proto.Notification{Info: "Player " + event.info + " disconnected"}); err != nil {
+				return err
+			}
+		case SESSION_DISCLAIMER:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("The game will start in %d seconds", START_DELAY/time.Second)}); err != nil {
+				return err
+			}
+		case SESSION_ABORT:
+			if err := stream.Send(&proto.Notification{Info: "There are not enough players to continue game, some of them might have disconnected"}); err != nil {
+				return err
+			}
+		case SESSION_START:
+			if err := stream.Send(&proto.Notification{Info: "---- GAME STARTED ----"}); err != nil {
+				return err
+			}
+		case SESSION_END:
+			if err := stream.Send(&proto.Notification{Info: "---- GAME ENDED ----\nThe outcome: " + event.info}); err != nil {
+				return err
+			}
+		case ROLE_ASSIGNED:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("You have been assigned the role of: %s", event.info)}); err != nil {
+				return err
+			}
+		case PLAYER_NOT_FOUND:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("There is no player with the name '%s' in the current session", event.info)}); err != nil {
+				return err
+			}
+		case PLAYER_EXPOSED:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("The Detective has found out that '%s' is a member of Mafia!", event.info)}); err != nil {
+				return err
+			}
+		case NO_EXPOSED_PLAYER:
+			if err := stream.Send(&proto.Notification{Info: "you haven't exposed anyone during last night"}); err != nil {
+				return err
+			}
+		case GUESS_SUCCESS:
+			if err := stream.Send(&proto.Notification{Info: "the selected player is a member of Mafia!"}); err != nil {
+				return err
+			}
+		case GUESS_FAIL:
+			if err := stream.Send(&proto.Notification{Info: "the selected player is not a member of Mafia"}); err != nil {
+				return err
+			}
+		case PLAYER_ELIMINATED:
+			nameRole := strings.Split(event.info, " ")
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("Player '%s' was a %s and has been eliminated. He may continue to observe the game session as a ghost", nameRole[0], nameRole[1])}); err != nil {
+				return err
+			}
+		case VOTING_RESTRICTED:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("Voting is restricted for you: %s", event.info)}); err != nil {
+				return err
+			}
+		case VOTES_MISMATCH:
+			if err := stream.Send(&proto.Notification{Info: "There wasn't a single target with the highest count of votes, so no-one is being executed"}); err != nil {
+				return err
+			}
+		case MAFIA_VOTES_MISMATCH:
+			if err := stream.Send(&proto.Notification{Info: "All mafia members have to vote for the same person, but there has been a mismatch"}); err != nil {
+				return err
+			}
+		case PHASE_START_DAY:
+			if err := stream.Send(&proto.Notification{Info: "---- A new day has started ----"}); err != nil {
+				return err
+			}
+		case PHASE_START_NIGHT:
+			if err := stream.Send(&proto.Notification{Info: "---- Darkness falls upon the city... ----"}); err != nil {
 				return err
 			}
 		}
 	}
 
+	log.Printf("ClientId %d notification error: %v\n", req.Id, err)
 	return nil
 }
 
@@ -68,13 +142,38 @@ func (s *server) ShowPlayersList(context.Context, *proto.EmptyMsg) (*proto.Playe
 	return &proto.PlayersList{Players: s.session.GetConnectedPlayers()}, nil
 }
 
+func (s *server) Vote(_ context.Context, req *proto.ClientReq) (*proto.EmptyMsg, error) {
+	// TODO: maybe make the method return error
+	s.session.PlayerVote(req.Id.Id, req.Target.Name)
+	// TODO: allow a player to revote
+	return &proto.EmptyMsg{}, nil
+}
+
+func (s *server) EndDay(_ context.Context, req *proto.ClientId) (*proto.EmptyMsg, error) {
+	s.session.PlayerEndDay(req.Id)
+	return &proto.EmptyMsg{}, nil
+}
+
+func (s *server) Expose(_ context.Context, req *proto.ClientId) (*proto.EmptyMsg, error) {
+	s.session.PlayerExpose(req.Id)
+	return &proto.EmptyMsg{}, nil
+}
+
 func (s *server) ObserveSession() {
-	select {
-	case <-s.sessionStart:
-		// maybe start session in a separate goroutine
-		s.session.Start()
-	case <-s.sessionEnd:
-		s.session.End()
+	for {
+		select {
+		case <-s.sessionStart:
+			for s.session.HasStarted() {
+				time.Sleep(START_DELAY)
+			}
+			// maybe start session in a separate goroutine
+			// TODO: send Notification about session start
+			// wait for extra players to join before starting game session
+			log.Println("Awaiting session start")
+			s.session.NotifyPlayers(Notification{eventType: SESSION_DISCLAIMER}, "")
+			time.Sleep(START_DELAY)
+			s.session.Start()
+		}
 	}
 }
 
@@ -87,14 +186,19 @@ func Run(port int) {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
-	proto.RegisterMafiaServer(s, &server{
-		session:      MafiaSession{players: make(map[uint64]*MafiaPlayer)},
+	servImpl := server{
+		session: &mafiaSession{
+			players:              make(map[uint64]MafiaPlayer),
+			potentialVictims:     make(map[string]int),
+			delayedNotifications: []Notification{},
+		},
 		nextClientId: 0,
 		sessionStart: make(chan int),
-		sessionEnd:   make(chan int),
-	})
+	}
+	s := grpc.NewServer()
+	proto.RegisterMafiaServer(s, &servImpl)
 	log.Printf("SERVER listening at %v", listener.Addr())
+	go servImpl.ObserveSession()
 	if err := s.Serve(listener); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

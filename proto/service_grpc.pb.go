@@ -22,6 +22,9 @@ type MafiaClient interface {
 	Disconnect(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error)
 	SubscribeToNotifications(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (Mafia_SubscribeToNotificationsClient, error)
 	ShowPlayersList(ctx context.Context, in *EmptyMsg, opts ...grpc.CallOption) (*PlayersList, error)
+	Vote(ctx context.Context, in *ClientReq, opts ...grpc.CallOption) (*EmptyMsg, error)
+	EndDay(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error)
+	Expose(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error)
 }
 
 type mafiaClient struct {
@@ -91,6 +94,33 @@ func (c *mafiaClient) ShowPlayersList(ctx context.Context, in *EmptyMsg, opts ..
 	return out, nil
 }
 
+func (c *mafiaClient) Vote(ctx context.Context, in *ClientReq, opts ...grpc.CallOption) (*EmptyMsg, error) {
+	out := new(EmptyMsg)
+	err := c.cc.Invoke(ctx, "/Mafia.Mafia/Vote", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mafiaClient) EndDay(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error) {
+	out := new(EmptyMsg)
+	err := c.cc.Invoke(ctx, "/Mafia.Mafia/EndDay", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mafiaClient) Expose(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error) {
+	out := new(EmptyMsg)
+	err := c.cc.Invoke(ctx, "/Mafia.Mafia/Expose", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MafiaServer is the server API for Mafia service.
 // All implementations must embed UnimplementedMafiaServer
 // for forward compatibility
@@ -99,6 +129,9 @@ type MafiaServer interface {
 	Disconnect(context.Context, *ClientId) (*EmptyMsg, error)
 	SubscribeToNotifications(*ClientId, Mafia_SubscribeToNotificationsServer) error
 	ShowPlayersList(context.Context, *EmptyMsg) (*PlayersList, error)
+	Vote(context.Context, *ClientReq) (*EmptyMsg, error)
+	EndDay(context.Context, *ClientId) (*EmptyMsg, error)
+	Expose(context.Context, *ClientId) (*EmptyMsg, error)
 	mustEmbedUnimplementedMafiaServer()
 }
 
@@ -117,6 +150,15 @@ func (UnimplementedMafiaServer) SubscribeToNotifications(*ClientId, Mafia_Subscr
 }
 func (UnimplementedMafiaServer) ShowPlayersList(context.Context, *EmptyMsg) (*PlayersList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ShowPlayersList not implemented")
+}
+func (UnimplementedMafiaServer) Vote(context.Context, *ClientReq) (*EmptyMsg, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Vote not implemented")
+}
+func (UnimplementedMafiaServer) EndDay(context.Context, *ClientId) (*EmptyMsg, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EndDay not implemented")
+}
+func (UnimplementedMafiaServer) Expose(context.Context, *ClientId) (*EmptyMsg, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Expose not implemented")
 }
 func (UnimplementedMafiaServer) mustEmbedUnimplementedMafiaServer() {}
 
@@ -206,6 +248,60 @@ func _Mafia_ShowPlayersList_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Mafia_Vote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MafiaServer).Vote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Mafia.Mafia/Vote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MafiaServer).Vote(ctx, req.(*ClientReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Mafia_EndDay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MafiaServer).EndDay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Mafia.Mafia/EndDay",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MafiaServer).EndDay(ctx, req.(*ClientId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Mafia_Expose_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MafiaServer).Expose(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Mafia.Mafia/Expose",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MafiaServer).Expose(ctx, req.(*ClientId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Mafia_ServiceDesc is the grpc.ServiceDesc for Mafia service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -224,6 +320,18 @@ var Mafia_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ShowPlayersList",
 			Handler:    _Mafia_ShowPlayersList_Handler,
+		},
+		{
+			MethodName: "Vote",
+			Handler:    _Mafia_Vote_Handler,
+		},
+		{
+			MethodName: "EndDay",
+			Handler:    _Mafia_EndDay_Handler,
+		},
+		{
+			MethodName: "Expose",
+			Handler:    _Mafia_Expose_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

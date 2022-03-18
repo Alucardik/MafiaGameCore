@@ -7,10 +7,14 @@ import (
 type command uint16
 
 const (
-	CONNECT command = iota
+	HELP command = iota
+	EXIT
+	CONNECT
 	DISCONNECT
 	SHOW_PLAYER_LIST
-	EXIT
+	VOTE
+	END_DAY
+	EXPOSE
 	UNKNOWN
 )
 
@@ -22,6 +26,12 @@ func (c command) toString() string {
 		return "disconnect"
 	case SHOW_PLAYER_LIST:
 		return "players"
+	case VOTE:
+		return "vote"
+	case EXPOSE:
+		return "expose"
+	case END_DAY:
+		return "skip"
 	case EXIT:
 		return "exit"
 	default:
@@ -37,6 +47,14 @@ func parseCommand(cmd string) command {
 		return DISCONNECT
 	case SHOW_PLAYER_LIST.toString():
 		return SHOW_PLAYER_LIST
+	case VOTE.toString():
+		return VOTE
+	case EXPOSE.toString():
+		return EXPOSE
+	case END_DAY.toString():
+		return END_DAY
+	case EXIT.toString():
+		return EXIT
 	default:
 		return UNKNOWN
 	}
