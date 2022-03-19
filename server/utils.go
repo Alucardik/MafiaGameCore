@@ -24,6 +24,8 @@ const (
 	MAFIA_VOTES_MISMATCH
 	PHASE_START_DAY
 	PHASE_START_NIGHT
+	CHAT_MSG
+	CHAT_RESTRICTED
 )
 
 type Notification struct {

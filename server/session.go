@@ -24,6 +24,7 @@ type MafiaSession interface {
 	GetConnectedPlayers() []string
 	HasStarted() bool
 	NotifyPlayers(msg Notification, role string)
+	SendChatMsg(id uint64, msg string)
 	GetPlayersNotifications(id uint64) (Notification, error)
 	UnsubscribePlayerFromNotifications(id uint64)
 }
@@ -39,6 +40,23 @@ type mafiaSession struct {
 	delayedNotifications []Notification
 	lock                 sync.Mutex
 	waitGr               sync.WaitGroup
+}
+
+func (ms *mafiaSession) SendChatMsg(id uint64, msg string) {
+	if ms.players[id].GetRole() == GHOST {
+		ms.players[id].Notify(Notification{CHAT_RESTRICTED, "Ghosts are not allowed to send any messages"})
+		return
+	}
+
+	if ms.phase == DAY {
+		ms.NotifyPlayers(Notification{CHAT_MSG, ms.players[id].GetName() + "@@" + msg}, ALL)
+	} else {
+		if ms.players[id].GetRole() != MAFIA {
+			ms.players[id].Notify(Notification{CHAT_RESTRICTED, "only mafia can communicate at night"})
+			return
+		}
+		ms.NotifyPlayers(Notification{CHAT_MSG, ms.players[id].GetName() + "@@" + msg}, MAFIA)
+	}
 }
 
 func (ms *mafiaSession) snapshot() {
@@ -231,9 +249,9 @@ func (ms *mafiaSession) UnsubscribePlayerFromNotifications(id uint64) {
 	ms.players[id].CancelNotifications()
 }
 
-func (ms *mafiaSession) NotifyPlayers(msg Notification, role string) {
+func (ms *mafiaSession) NotifyPlayers(msg Notification, scope string) {
 	for _, player := range ms.players {
-		if role == ALL || role == player.GetRole() {
+		if scope == ALL || scope == player.GetRole() {
 			player.Notify(msg)
 		}
 	}

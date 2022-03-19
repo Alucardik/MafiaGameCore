@@ -25,6 +25,7 @@ type MafiaClient interface {
 	Vote(ctx context.Context, in *ClientReq, opts ...grpc.CallOption) (*EmptyMsg, error)
 	EndDay(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error)
 	Expose(ctx context.Context, in *ClientId, opts ...grpc.CallOption) (*EmptyMsg, error)
+	Chat(ctx context.Context, in *ChatMsg, opts ...grpc.CallOption) (*EmptyMsg, error)
 }
 
 type mafiaClient struct {
@@ -121,6 +122,15 @@ func (c *mafiaClient) Expose(ctx context.Context, in *ClientId, opts ...grpc.Cal
 	return out, nil
 }
 
+func (c *mafiaClient) Chat(ctx context.Context, in *ChatMsg, opts ...grpc.CallOption) (*EmptyMsg, error) {
+	out := new(EmptyMsg)
+	err := c.cc.Invoke(ctx, "/Mafia.Mafia/Chat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MafiaServer is the server API for Mafia service.
 // All implementations must embed UnimplementedMafiaServer
 // for forward compatibility
@@ -132,6 +142,7 @@ type MafiaServer interface {
 	Vote(context.Context, *ClientReq) (*EmptyMsg, error)
 	EndDay(context.Context, *ClientId) (*EmptyMsg, error)
 	Expose(context.Context, *ClientId) (*EmptyMsg, error)
+	Chat(context.Context, *ChatMsg) (*EmptyMsg, error)
 	mustEmbedUnimplementedMafiaServer()
 }
 
@@ -159,6 +170,9 @@ func (UnimplementedMafiaServer) EndDay(context.Context, *ClientId) (*EmptyMsg, e
 }
 func (UnimplementedMafiaServer) Expose(context.Context, *ClientId) (*EmptyMsg, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Expose not implemented")
+}
+func (UnimplementedMafiaServer) Chat(context.Context, *ChatMsg) (*EmptyMsg, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Chat not implemented")
 }
 func (UnimplementedMafiaServer) mustEmbedUnimplementedMafiaServer() {}
 
@@ -302,6 +316,24 @@ func _Mafia_Expose_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Mafia_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChatMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MafiaServer).Chat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Mafia.Mafia/Chat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MafiaServer).Chat(ctx, req.(*ChatMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Mafia_ServiceDesc is the grpc.ServiceDesc for Mafia service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -332,6 +364,10 @@ var Mafia_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Expose",
 			Handler:    _Mafia_Expose_Handler,
+		},
+		{
+			MethodName: "Chat",
+			Handler:    _Mafia_Chat_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

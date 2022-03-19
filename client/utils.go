@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -15,8 +16,21 @@ const (
 	VOTE
 	END_DAY
 	EXPOSE
+	CHAT
 	UNKNOWN
 )
+
+func showHints() {
+	fmt.Println("",
+		"'connect':\t join a game server\n",
+		"'exit':\t exit client\n",
+		"'players':\t show players in the game session\n",
+		"'vote':\t vote for a player\n",
+		"'expose':\t expose mafia if you are a detective\n",
+		"'skip':\t end your turn in the current day\n",
+		"'chat':\t send a message in chat",
+	)
+}
 
 func (c command) toString() string {
 	switch c {
@@ -34,6 +48,10 @@ func (c command) toString() string {
 		return "skip"
 	case EXIT:
 		return "exit"
+	case CHAT:
+		return "chat"
+	case HELP:
+		return "help"
 	default:
 		return "undefined"
 	}
@@ -55,6 +73,10 @@ func parseCommand(cmd string) command {
 		return END_DAY
 	case EXIT.toString():
 		return EXIT
+	case CHAT.toString():
+		return CHAT
+	case HELP.toString():
+		return HELP
 	default:
 		return UNKNOWN
 	}

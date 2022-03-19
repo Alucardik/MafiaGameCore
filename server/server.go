@@ -131,6 +131,15 @@ func (s *server) SubscribeToNotifications(req *proto.ClientId, stream proto.Mafi
 			if err := stream.Send(&proto.Notification{Info: "---- Darkness falls upon the city... ----"}); err != nil {
 				return err
 			}
+		case CHAT_MSG:
+			nameMsg := strings.Split(event.info, "@@")
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("%s -> : %s", nameMsg[0], nameMsg[1])}); err != nil {
+				return err
+			}
+		case CHAT_RESTRICTED:
+			if err := stream.Send(&proto.Notification{Info: fmt.Sprintf("You can't send message now: %s", event.info)}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -145,7 +154,6 @@ func (s *server) ShowPlayersList(context.Context, *proto.EmptyMsg) (*proto.Playe
 func (s *server) Vote(_ context.Context, req *proto.ClientReq) (*proto.EmptyMsg, error) {
 	// TODO: maybe make the method return error
 	s.session.PlayerVote(req.Id.Id, req.Target.Name)
-	// TODO: allow a player to revote
 	return &proto.EmptyMsg{}, nil
 }
 
@@ -159,6 +167,11 @@ func (s *server) Expose(_ context.Context, req *proto.ClientId) (*proto.EmptyMsg
 	return &proto.EmptyMsg{}, nil
 }
 
+func (s *server) Chat(_ context.Context, req *proto.ChatMsg) (*proto.EmptyMsg, error) {
+	s.session.SendChatMsg(req.Id.Id, req.Msg)
+	return &proto.EmptyMsg{}, nil
+}
+
 func (s *server) ObserveSession() {
 	for {
 		select {
@@ -166,8 +179,7 @@ func (s *server) ObserveSession() {
 			for s.session.HasStarted() {
 				time.Sleep(START_DELAY)
 			}
-			// maybe start session in a separate goroutine
-			// TODO: send Notification about session start
+			// TODO: maybe start session in a separate goroutine
 			// wait for extra players to join before starting game session
 			log.Println("Awaiting session start")
 			s.session.NotifyPlayers(Notification{eventType: SESSION_DISCLAIMER}, "")
@@ -177,11 +189,7 @@ func (s *server) ObserveSession() {
 	}
 }
 
-// TODO: add CLI via flags
-
 func Run(port int) {
-	//flag.Parse()
-	//listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)

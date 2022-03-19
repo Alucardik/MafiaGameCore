@@ -33,8 +33,7 @@ func (c *client) checkState() bool {
 
 // TODO: add empty string check for name
 func (c *client) Connect(clientName, address string) {
-	// TODO: conn, err := grpc.Dial(address+":8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("Couldn't connect to server: %v\n", err)
 		return
@@ -76,6 +75,20 @@ func (c *client) Disconnect() {
 	c.isConnected = false
 }
 
+func (c *client) Chat(msg string) {
+	if !c.checkState() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := c.dialer.Chat(ctx, &proto.ChatMsg{Id: &proto.ClientId{Id: c.id}, Msg: msg})
+	if err != nil {
+		log.Printf("Couldn't get response from server: %v\n", err)
+	}
+}
+
 func (c *client) Subscribe() {
 	if !c.checkState() {
 		return
@@ -102,7 +115,7 @@ func (c *client) Subscribe() {
 		}
 		log.Printf(notification.Info)
 		// TODO: REWORK END_CONDITION
-		if notification.Info[:12] == "The outcome" {
+		if len(notification.Info) > 12 && notification.Info[:12] == "The outcome" {
 			break
 		}
 	}
@@ -231,6 +244,17 @@ func Run() {
 			fmt.Println("Bye-bye!")
 			cl.Disconnect()
 			os.Exit(0)
+		case CHAT:
+			fmt.Println("Enter your message:")
+			msg, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("ERROR", err)
+				continue
+			}
+
+			cl.Chat(strings.TrimSpace(msg))
+		case HELP:
+			showHints()
 		case UNKNOWN:
 			fmt.Println("Unknown command, print 'help' to see available commands")
 		}

@@ -11,6 +11,7 @@ service Mafia {
   rpc Vote(ClientReq) returns (EmptyMsg);
   rpc EndDay(ClientId) returns (EmptyMsg);
   rpc Expose(ClientId) returns (EmptyMsg);
+  rpc Chat(ChatMsg) returns (EmptyMsg);
 }
 
 message EmptyMsg {
@@ -31,6 +32,11 @@ message ClientReq {
 
 message Notification {
   string info = 1;
+}
+
+message ChatMsg {
+  ClientId id = 1;
+  string msg = 2;
 }
 
 message PlayersList {

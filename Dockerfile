@@ -7,5 +7,6 @@ COPY go.mod .
 COPY go.sum .
 COPY proto ./proto
 COPY server ./server
+COPY client ./client
 
 RUN go build .
